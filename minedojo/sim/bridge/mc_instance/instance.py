@@ -158,12 +158,13 @@ class MinecraftInstance:
             # 0. Get PID of launcher.
             parent_pid = os.getpid()
             # 1. Launch minecraft process
+            print(f"[{parent_pid}] Begin launching Minecraft on port {port}...")
             self.minecraft_process = self._launch_minecraft(
                 port,
                 self.minecraft_dir,
                 replaceable=replaceable,
             )
-
+            
             # 2. Create a watcher process to ensure things get cleaned up
             if not daemonize:
                 # 2. Create a watcher process to ensure things get cleaned up
@@ -176,7 +177,11 @@ class MinecraftInstance:
             client_ready = False
             server_ready = False
 
+            start = time.time()
             while True:
+                if time.time() - start > 600:
+                    raise TimeoutError("Minecraft process timed out (10min).")
+                
                 mine_log_encoding = locale.getpreferredencoding(False)
                 line = self.minecraft_process.stdout.readline().decode(
                     mine_log_encoding
@@ -210,6 +215,7 @@ class MinecraftInstance:
                 port_received = MALMOENVPORTSTR in line
                 if port_received:
                     self._port = int(line.split(MALMOENVPORTSTR)[-1].strip())
+                    print(f"[{parent_pid}] " + line[line.index(MALMOENVPORTSTR):].strip("\n"))
 
                 client_ready = "CLIENT enter state: DORMANT" in line
                 server_ready = "SERVER enter state: DORMANT" in line

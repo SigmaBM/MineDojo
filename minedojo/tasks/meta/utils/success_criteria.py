@@ -5,6 +5,7 @@ from typing import Callable, List, Dict, Union
 
 __all__ = [
     "check_success_base",
+    "empty_check",
     "simple_inventory_based_check",
     "simple_stat_kill_entity_based_check",
     "time_since_death_check",
@@ -22,6 +23,17 @@ check_success_base = Callable[
     ],
     bool,
 ]
+
+
+def _empty_check(*args, **kwargs):
+    """
+    An empty success check that always returns Fasle.
+    """
+    return False
+
+
+def empty_check(*args, **kwargs) -> check_success_base:
+    return _empty_check
 
 
 def _simple_stat_kill_entity_based_check(

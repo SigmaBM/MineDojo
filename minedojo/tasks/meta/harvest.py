@@ -145,6 +145,10 @@ class HarvestMeta(ExtraSpawnMetaTaskBase):
         world_seed: Optional[str] = None,
         # ------ reset mode ------
         fast_reset: bool = True,
+        # (fast_reset_range --> ~_high & ~_low)
+        fast_reset_random_teleport_range: Optional[int] = None,
+        fast_reset_random_teleport_range_high: Optional[int] = None,
+        fast_reset_random_teleport_range_low: Optional[int] = None,
         # ------ obs ------
         image_size: Union[int, Tuple[int, int]],
         use_voxel: bool = False,
@@ -202,9 +206,16 @@ class HarvestMeta(ExtraSpawnMetaTaskBase):
 
         start_time = 18000 if start_at_night else None
 
-        generate_world_type = (
-            "default" if specified_biome is None else "specified_biome"
-        )
+        # generate_world_type = (
+        #     "default" if specified_biome is None else "specified_biome"
+        # )
+        if specified_biome is None:
+            generate_world_type = "default"
+        elif specified_biome == "flat":
+            generate_world_type = "flat"
+            specified_biome = None
+        else:
+            generate_world_type = "specified_biome"
 
         super().__init__(
             initial_mobs=initial_mobs,
@@ -215,6 +226,10 @@ class HarvestMeta(ExtraSpawnMetaTaskBase):
             extra_spawn_range_low=spawn_range_low,
             extra_spawn_range_high=spawn_range_high,
             fast_reset=fast_reset,
+            # (fast_reset_range --> ~_high & ~_low)
+            fast_reset_random_teleport_range=fast_reset_random_teleport_range,
+            fast_reset_random_teleport_range_high=fast_reset_random_teleport_range_high,
+            fast_reset_random_teleport_range_low=fast_reset_random_teleport_range_low,
             success_criteria=success_criteria,
             reward_fns=reward_fns,
             seed=seed,

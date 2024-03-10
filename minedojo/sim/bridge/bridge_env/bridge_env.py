@@ -167,14 +167,24 @@ class BridgeEnv:
         """
         Gets a new instance and sets up a logger if need be.
         """
-        if port is not None:
-            instance = InstanceManager.add_existing_instance(port)
-        else:
-            instance = InstanceManager.get_instance(
-                os.getpid(), instance_id=instance_id
-            )
-
-        instance.launch(replaceable=self._is_fault_tolerant)
+        while True:
+            if port is not None:
+                instance = InstanceManager.add_existing_instance(port)
+            else:
+                instance = InstanceManager.get_instance(
+                    os.getpid(), instance_id=instance_id
+                )
+            
+            try:
+                instance.launch(replaceable=self._is_fault_tolerant)
+            except TimeoutError:
+                logger.warning(f"[{os.getpid()}] Failed to launch instance. Retrying...")
+                # print(f"[{os.getpid()}] Failed to launch instance. Retrying...")
+                # instance.close()
+                instance.kill()
+            else:
+                break
+        
         instance.had_to_clean = False
         return instance
 

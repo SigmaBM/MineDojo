@@ -5,6 +5,7 @@ from typing import Union, Callable, Dict
 
 __all__ = [
     "reward_fn_base",
+    "empty_reward",
     "simple_inventory_based_reward",
     "simple_stat_kill_entity_based_reward",
     "possess_item_reward",
@@ -25,6 +26,17 @@ reward_fn_base = Callable[
     ],
     float,
 ]
+
+
+def _empty_reward(*args, **kwargs):
+    """
+    An empty reward function that always returns 0.
+    """
+    return 0.
+
+
+def empty_reward(*args, **kwargs) -> reward_fn_base:
+    return _empty_reward
 
 
 def _simple_stat_kill_entity_based_reward(

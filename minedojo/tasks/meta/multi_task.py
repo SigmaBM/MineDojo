@@ -1,16 +1,209 @@
 from typing import List, Optional, Union, Tuple, Dict
+from functools import partial
 
 from .base import ExtraSpawnMetaTaskBase
 from ...sim.inventory import InventoryItem
 from .extra_spawn import SpawnItem2Condition
 from .utils import (
     always_satisfy_condition,
+    empty_check,
+    empty_reward,
     simple_stat_kill_entity_based_check,
     simple_stat_kill_entity_based_reward,
+    simple_inventory_based_check,
+    simple_inventory_based_reward,
+    check_success_base,
+    reward_fn_base,
 )
 
+COMBAT_TARGET = [
+    "cow",
+    "sheep",
+    "chicken",
+    "pig",
+    "horse",
+    "llama",
+    "wolf",
+    "donkey",
+    "bat",
+    "spider",
+    "rabbit",
+    # "mooshroom",
+    "mushroom_cow",
+    "zombie",
+    "pig_zombie",
+    "skeleton",
+    "creeper",
+    "enderman",
+]
 
-class CombatMeta(ExtraSpawnMetaTaskBase):
+HARVEST_TARGET = [
+    "log",
+    "leaves",
+    "dirt",
+    "sand",
+    "milk",
+    "cow_milk",
+    "mooshroom_milk",
+    "wool",
+    # flowers
+    "flower",
+    "dandelion",
+    "poppy",
+    "allium",
+    "azure_bluet",
+    "red_tulip",
+    "orange_tulip",
+    "white_tulip",
+    "pink_tulip",
+    "oxeye_daisy",
+    "sunflower",
+    "lilac",
+    "rose",
+    "grass",
+    "water",
+    "redstone_torch",
+    "torch",
+    "mushroom",
+    "stone",
+]
+
+# TARGET with different name for VLM
+HARVEST_TARGET2VLM = {
+    "log": "oak wood or birch wood",
+    "leaves": "oak leaves or birch leaves",
+    "milk": "cow",
+    "cow_milk": "cow",
+    "mooshroom_milk": "mooshroom",
+    "wool": "sheep",
+    "azure_bluet": "azure bluet",
+    "red_tulip": "red tulip",
+    "orange_tulip": "orange tulip",
+    "white_tulip": "white tulip",
+    "pink_tulip": "pink tulip",
+    "oxeye_daisy": "oxeye daisy",
+    "rose": "rose bush",
+    "redstone_torch": "redstone torch",
+    "water": "lake",
+    "mushroom": "mooshroom",
+}
+
+HARVEST_TARGET2MCID = {
+    "log": "log",
+    "leaves": "leaves",
+    "dirt": "dirt",
+    "sand": "sand",
+    "milk": "milk_bucket",
+    "cow_milk": "milk_bucket",
+    "mooshroom_milk": "milk_bucket",
+    "wool": "wool",
+    "dandelion": "yellow_flower",
+    "flower": "red_flower",
+    "poppy": "red_flower",
+    "allium": "red_flower",
+    "azure_bluet": "red_flower",
+    "red_tulip": "red_flower",
+    "orange_tulip": "red_flower",
+    "white_tulip": "red_flower",
+    "pink_tulip": "red_flower",
+    "oxeye_daisy": "red_flower",
+    "sunflower": "double_plant",
+    "lilac": "double_plant",
+    "rose": "double_plant",
+    "grass": "tallgrass",
+    "water": "water_bucket",
+    "redstone_torch": "redstone_torch",
+    "torch": "torch",
+    "mushroom": "red_mushroom",
+    "stone": "cobblestone",
+}
+
+HARVEST_TARGET2VARIANT = {
+    "poppy": 0,
+    "allium": 2,
+    "azure_bluet": 3,
+    "red_tulip": 4,
+    "orange_tulip": 5,
+    "white_tulip": 6,
+    "pink_tulip": 7,
+    "oxeye_daisy": 8,
+    "sunflower": 0,
+    "lilac": 1,
+    "rose": 4,
+}
+
+def _variant_inventory_based_check(
+    name: str,
+    variant: int,
+    quantity: int,
+    ini_info_dict: dict,
+    cur_info_dict: dict,
+    elapsed_timesteps: int,
+):
+    """
+    A simple success check based on `info["inventory"]`
+    """
+    return (
+        sum(
+            [
+                inv_item["quantity"]
+                for inv_item in cur_info_dict["inventory"]
+                if inv_item["name"] == name and inv_item["variant"] == variant
+            ]
+        )
+        - sum(
+            [
+                inv_item["quantity"]
+                for inv_item in ini_info_dict["inventory"]
+                if inv_item["name"] == name and inv_item["variant"] == variant
+            ]
+        )
+    ) >= quantity
+
+
+def variant_inventory_based_check(
+    name: str, variant: int , quantity: int, **kwargs
+) -> check_success_base:
+    return partial(_variant_inventory_based_check, name=name, variant=variant, quantity=quantity)
+
+
+def _variant_inventory_based_reward(
+    name: str,
+    variant: int,
+    weight: Union[int, float],
+    ini_info_dict: dict,
+    pre_info_dict: dict,
+    cur_info_dict: dict,
+    elapsed_timesteps: int,
+):
+    """
+    A simple reward based on increment in `info["inventory"]`
+    """
+    return (
+        sum(
+            [
+                inv_item["quantity"]
+                for inv_item in cur_info_dict["inventory"]
+                if inv_item["name"] == name and inv_item["variant"] == variant
+            ]
+        )
+        - sum(
+            [
+                inv_item["quantity"]
+                for inv_item in pre_info_dict["inventory"]
+                if inv_item["name"] == name and inv_item["variant"] == variant
+            ]
+        )
+    ) * weight
+
+
+def variant_inventory_based_reward(
+    name: str, variant: int, weight: Union[int, float], **kwargs
+) -> reward_fn_base:
+    return partial(_variant_inventory_based_reward, name=name, variant=variant, weight=weight)
+
+
+class MultiTaskMeta(ExtraSpawnMetaTaskBase):
     """
     Class for combat tasks.
     Args:
@@ -169,7 +362,7 @@ class CombatMeta(ExtraSpawnMetaTaskBase):
         # ------ event-level action or keyboard-mouse level action ------
         event_level_control: bool = True,
         # ------ misc ------
-        sim_name: str = "CombatMeta",
+        sim_name: str = "MultiTaskMeta",
     ):
         if isinstance(target_names, str):
             target_names = [target_names]
@@ -190,6 +383,7 @@ class CombatMeta(ExtraSpawnMetaTaskBase):
 
         spawn_condition = None
         if spawn_rate is not None:
+            # TODO: implement Target2SpawnItem for harvest target
             if isinstance(spawn_rate, float) or isinstance(spawn_rate, int):
                 spawn_rate = {k: spawn_rate for k in target_names}
             elif isinstance(spawn_rate, list):
@@ -203,14 +397,77 @@ class CombatMeta(ExtraSpawnMetaTaskBase):
                 for k in spawn_rate.keys()
             }
 
-        success_criteria = [
-            simple_stat_kill_entity_based_check(name=k, quantity=v)
-            for k, v in target_quantities.items()
-        ]
-        reward_fns = [
-            simple_stat_kill_entity_based_reward(name=k, weight=v)
-            for k, v in reward_weights.items()
-        ]
+        success_criteria = []
+        for k, v in target_quantities.items():
+            if k in COMBAT_TARGET:
+                # special case [temporal]
+                if k == "mooshroom":
+                    k_ = "mushroom_cow"
+                else:
+                    k_ = k
+                success_criteria.append(
+                    simple_stat_kill_entity_based_check(name=k, quantity=v)
+                )
+            elif k in HARVEST_TARGET:
+                if k in HARVEST_TARGET2VARIANT:
+                    success_criteria.append(
+                        variant_inventory_based_check(
+                            name=HARVEST_TARGET2MCID[k],
+                            variant=HARVEST_TARGET2VARIANT[k],
+                            quantity=v,
+                        )
+                    )
+                else:
+                    success_criteria.append(
+                        simple_inventory_based_check(
+                            name=HARVEST_TARGET2MCID[k],
+                            quantity=v,
+                        )
+                    )
+            else:
+                # raise ValueError(f"Unknown target name {k}")
+                print(f"Warning: unknown target name {k}, empty success criteria added.")
+                success_criteria.append(empty_check())
+
+        reward_fns = []
+        for k, v in reward_weights.items():
+            if k in COMBAT_TARGET:
+                if k == "mooshroom":
+                    k_ = "mushroom_cow"
+                else:
+                    k_ = k
+                reward_fns.append(
+                    simple_stat_kill_entity_based_reward(name=k_, weight=v)
+                )
+            elif k in HARVEST_TARGET:
+                if k in HARVEST_TARGET2VARIANT:
+                    reward_fns.append(
+                        variant_inventory_based_reward(
+                            name=HARVEST_TARGET2MCID[k],
+                            variant=HARVEST_TARGET2VARIANT[k],
+                            weight=v,
+                        )
+                    )
+                else:
+                    reward_fns.append(
+                        simple_inventory_based_reward(
+                            name=HARVEST_TARGET2MCID[k], 
+                            weight=v,
+                        )
+                    )
+            else:
+                # raise ValueError(f"Unknown target name {k}")
+                print(f"Warning: unknown target name {k}, no reward function added.")
+                reward_fns.append(empty_reward())
+
+        # success_criteria = [
+        #     simple_stat_kill_entity_based_check(name=k, quantity=v)
+        #     for k, v in target_quantities.items()
+        # ]
+        # reward_fns = [
+        #     simple_stat_kill_entity_based_reward(name=k, weight=v)
+        #     for k, v in reward_weights.items()
+        # ]
 
         start_time, allow_time_passage = None, True
         if start_at_night:

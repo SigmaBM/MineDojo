@@ -54,6 +54,9 @@ class MetaTaskBase(gym.Wrapper):
         *,
         fast_reset: bool = True,
         fast_reset_random_teleport_range: Optional[int] = None,
+        # (fast_reset_range --> ~_high & ~_low)
+        fast_reset_random_teleport_range_high: Optional[int] = None,
+        fast_reset_random_teleport_range_low: Optional[int] = None,
         success_criteria: List[check_success_base],
         reward_fns: List[reward_fn_base],
         **kwargs,
@@ -62,7 +65,7 @@ class MetaTaskBase(gym.Wrapper):
         self._fast_reset = fast_reset
         if fast_reset:
             sim = FastResetWrapper(
-                sim, random_teleport_range=fast_reset_random_teleport_range
+                sim, random_teleport_range=fast_reset_random_teleport_range,random_teleport_range_high=fast_reset_random_teleport_range_high,random_teleport_range_low=fast_reset_random_teleport_range_low
             )
         super().__init__(env=sim)
 
@@ -78,13 +81,22 @@ class MetaTaskBase(gym.Wrapper):
     def is_successful(self):
         return self._is_successful
 
-    def reset(self):
+    # move_flag: added augment for fast_reset and teleport Agent
+    def reset(
+        self, 
+        move_flag=True, 
+        force_slow_reset=False,
+        custom_cmds=None,
+    ):
         """Resets the environment to an initial state and returns an initial observation.
 
         Return:
             Agent’s initial observation.
         """
-        obs = self.env.reset()
+        if self._fast_reset:
+            obs = self.env.reset(move_flag, force_slow_reset, custom_cmds)
+        else:
+            obs = self.env.reset()
         info = self.env.prev_info
         obs, info = self._after_sim_reset_hook(obs, info)
         self._ini_info_dict = (
@@ -116,12 +128,13 @@ class MetaTaskBase(gym.Wrapper):
             cur_info=info,
             elapsed_timesteps=self._elapsed_timesteps,
         )
-        self._is_successful = self._determine_success_hook(
+        self._is_successful, self._success = self._determine_success_hook(
             ini_info=self._ini_info_dict,
             cur_info=info,
             elapsed_timesteps=self._elapsed_timesteps,
         )
         done = self.env.is_terminated or self._is_successful
+        info["success"] = self._success
         self._pre_info_dict = deepcopy(info)
         return obs, reward, done, info
 
@@ -178,18 +191,27 @@ class MetaTaskBase(gym.Wrapper):
 
     def _determine_success_hook(
         self, ini_info: Dict[str, Any], cur_info: Dict[str, Any], elapsed_timesteps: int
-    ) -> bool:
-        return any(
-            [
-                check_success(
-                    ini_info_dict=ini_info,
-                    cur_info_dict=cur_info,
-                    elapsed_timesteps=elapsed_timesteps,
-                )
-                for check_success in self._success_criteria
-            ]
-        )
-
+    # ) -> bool:
+    ) -> Tuple[bool, List[bool]]:
+        # return any(
+        #     [
+        #         check_success(
+        #             ini_info_dict=ini_info,
+        #             cur_info_dict=cur_info,
+        #             elapsed_timesteps=elapsed_timesteps,
+        #         )
+        #         for check_success in self._success_criteria
+        #     ]
+        # )
+        success = [
+            check_success(
+                ini_info_dict=ini_info,
+                cur_info_dict=cur_info,
+                elapsed_timesteps=elapsed_timesteps,
+            )
+            for check_success in self._success_criteria
+        ]
+        return any(success), success
 
 class ExtraSpawnMetaTaskBase(MetaTaskBase):
     """
@@ -239,7 +261,8 @@ class ExtraSpawnMetaTaskBase(MetaTaskBase):
         extra_spawn_range_low: Optional[Tuple[int, int, int]],
         extra_spawn_range_high: Optional[Tuple[int, int, int]],
         fast_reset: bool = True,
-        fast_reset_random_teleport_range: Optional[int] = None,
+        fast_reset_random_teleport_range_low: Optional[int] = None,
+        fast_reset_random_teleport_range_high: Optional[int] = None,
         success_criteria: List[check_success_base],
         reward_fns: List[reward_fn_base],
         **kwargs,
@@ -300,7 +323,8 @@ class ExtraSpawnMetaTaskBase(MetaTaskBase):
 
         super().__init__(
             fast_reset=fast_reset,
-            fast_reset_random_teleport_range=fast_reset_random_teleport_range,
+            fast_reset_random_teleport_range_high=fast_reset_random_teleport_range_high,
+            fast_reset_random_teleport_range_low=fast_reset_random_teleport_range_low,
             success_criteria=success_criteria,
             reward_fns=reward_fns,
             **kwargs,
